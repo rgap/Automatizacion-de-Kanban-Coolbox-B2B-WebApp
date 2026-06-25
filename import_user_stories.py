@@ -141,22 +141,64 @@ def delete_existing_projects():
         )
 
 
+def project_owner_and_repo_ids():
+    data = gh_graphql(
+        """
+        query($owner: String!, $repo: String!) {
+          repositoryOwner(login: $owner) {
+            id
+          }
+          repository(owner: $owner, name: $repo) {
+            id
+          }
+        }
+        """,
+        {
+            "owner": OWNER,
+            "repo": REPO,
+        },
+    )
+    owner = data["data"]["repositoryOwner"]
+    repository = data["data"]["repository"]
+
+    if not owner:
+        raise SystemExit(f"No existe el owner de GitHub: {OWNER}.")
+
+    if not repository:
+        raise SystemExit(f"No existe el repo de GitHub: {FULL_REPO}.")
+
+    return owner["id"], repository["id"]
+
+
 def project():
     print(f"Creando Project: {PROJECT_TITLE}")
-    created = gh_json([
-        "project",
-        "create",
-        "--owner",
-        OWNER,
-        "--title",
-        PROJECT_TITLE,
-        "--format",
-        "json",
-    ])
+    owner_id, repository_id = project_owner_and_repo_ids()
+    created = gh_graphql(
+        """
+        mutation($ownerId: ID!, $title: String!, $repositoryId: ID!) {
+          createProjectV2(input: {
+            ownerId: $ownerId,
+            title: $title,
+            repositoryId: $repositoryId
+          }) {
+            projectV2 {
+              number
+            }
+          }
+        }
+        """,
+        {
+            "ownerId": owner_id,
+            "title": PROJECT_TITLE,
+            "repositoryId": repository_id,
+        },
+    )
+    number = created["data"]["createProjectV2"]["projectV2"]["number"]
+
     return gh_json([
         "project",
         "view",
-        str(created["number"]),
+        str(number),
         "--owner",
         OWNER,
         "--format",
@@ -260,7 +302,14 @@ def status_field(project_number):
 
 
 def project_columns():
-    return COLUMNS.copy()
+    return [status_display_name(name) for name in COLUMNS]
+
+
+def status_display_name(name):
+    if name in WIP_LIMITS:
+        return f"{name} (WIP {WIP_LIMITS[name]})"
+
+    return name
 
 
 def legacy_column_name(name):
@@ -275,14 +324,14 @@ def canonical_status_name(name):
         return "To Do"
 
     for column in COLUMNS:
-        if name in [column, legacy_column_name(column)]:
+        if name in [column, status_display_name(column), legacy_column_name(column)]:
             return column
 
     return name
 
 
 def existing_option_id(current_options, name):
-    candidates = [name, legacy_column_name(name)]
+    candidates = [status_display_name(name), name, legacy_column_name(name)]
 
     if name == "To Do":
         candidates.append("Todo")
@@ -300,7 +349,7 @@ def status_options(field):
     return [
         {
             **({"id": option_id} if option_id else {}),
-            "name": name,
+            "name": status_display_name(name),
             "color": COLUMN_COLORS[index],
             "description": "",
         }
