@@ -54,8 +54,6 @@ Se desarrolla en 4 sprints de 1 semana cada uno. En esta versión solo se trabaj
 
 Al final de los 4 sprints debe existir una versión básica donde se puedan registrar clientes, ver clientes existentes y visualizar alertas de recompra.
 
-No se incluye registro de contactos en esta versión. Esa funcionalidad queda para un siguiente MVP o sprint futuro.
-
 [/mvp]
 
 ## CONTEXTO, PROTOPERSONA Y TASKFLOW:
